@@ -24,13 +24,14 @@ const MSG_TYPE_COLORS: Record<string, string> = {
   file: 'bg-orange-50 text-orange-700',
 };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const Home = () => {
   const [items, setItems] = useState<MessageItem[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [loading, setLoading] = useState(false);
 
   const [keyword, setKeyword] = useState('');
@@ -44,10 +45,10 @@ const Home = () => {
   const [replies, setReplies] = useState<MessageItem[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
 
-  const fetchData = useCallback(async (p: number, filters: MessageQuery) => {
+  const fetchData = useCallback(async (p: number, size: number, filters: MessageQuery) => {
     setLoading(true);
     try {
-      const params: MessageQuery = { ...filters, page: p, page_size: PAGE_SIZE };
+      const params: MessageQuery = { ...filters, page: p, page_size: size };
       const res = await getMessages(params);
       const d = res.data.data;
       setItems(d.items);
@@ -59,7 +60,7 @@ const Home = () => {
     }
   }, []);
 
-  useEffect(() => { fetchData(1, {}); }, [fetchData]);
+  useEffect(() => { fetchData(1, pageSize, {}); }, [fetchData, pageSize]);
 
   const handleSearch = () => {
     const filters: MessageQuery = {};
@@ -69,7 +70,7 @@ const Home = () => {
     if (msgType) filters.msg_type = msgType;
     if (hasReply) filters.has_reply = hasReply;
     setAppliedFilters(filters);
-    fetchData(1, filters);
+    fetchData(1, pageSize, filters);
   };
 
   const handleReset = () => {
@@ -79,12 +80,17 @@ const Home = () => {
     setMsgType('');
     setHasReply('');
     setAppliedFilters({});
-    fetchData(1, {});
+    fetchData(1, pageSize, {});
   };
 
   const goPage = (p: number) => {
     if (p < 1 || p > totalPages) return;
-    fetchData(p, appliedFilters);
+    fetchData(p, pageSize, appliedFilters);
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    fetchData(1, size, appliedFilters);
   };
 
   const openDetail = async (item: MessageItem) => {
@@ -244,16 +250,31 @@ const Home = () => {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
+            <div className="flex items-center gap-3">
               <p className="text-xs text-gray-400">第 {page} / {totalPages} 页</p>
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <span>每页</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs outline-none focus:border-blue-400"
+                >
+                  {PAGE_SIZE_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <span>条</span>
+              </div>
+            </div>
+            {totalPages > 1 && (
               <div className="flex items-center gap-1.5">
                 <button onClick={() => goPage(page - 1)} disabled={page <= 1} className="rounded-lg bg-white px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-100 disabled:opacity-40">上一页</button>
                 {renderPageButtons()}
                 <button onClick={() => goPage(page + 1)} disabled={page >= totalPages} className="rounded-lg bg-white px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-100 disabled:opacity-40">下一页</button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
