@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { syncReport, getSyncStatus } from '@/api/report';
+import { syncReport, getSyncStatus, rebuildOptimize } from '@/api/report';
 import { Button } from '@repo/ui-shadcn/components/ui/button';
 
 type SyncMode = 'idle' | 'syncing' | 'done' | 'error';
@@ -7,6 +7,7 @@ type SyncMode = 'idle' | 'syncing' | 'done' | 'error';
 const SyncReport = () => {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [optimize, setOptimize] = useState(true);
   const [mode, setMode] = useState<SyncMode>('idle');
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<{
@@ -14,10 +15,13 @@ const SyncReport = () => {
     updated: number;
     duration: number;
     sync_at: string;
+    optimize_inserted?: number;
+    optimize_updated?: number;
   } | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<{
     total: number;
+    optimize_total: number;
     last_sync_at: string | null;
   } | null>(null);
 
@@ -53,7 +57,9 @@ const SyncReport = () => {
     setError('');
 
     try {
-      const params = full ? undefined : { start, end };
+      const params = full
+        ? { optimize }
+        : { start, end, optimize };
       const res = await syncReport(params);
       setProgress(100);
       setResult(res.data.data);
@@ -62,6 +68,32 @@ const SyncReport = () => {
     } catch (e: any) {
       setProgress(0);
       setError(e?.response?.data?.detail || e.message || '同步失败');
+      setMode('error');
+    }
+  };
+
+  const handleRebuild = async () => {
+    setMode('syncing');
+    setProgress(0);
+    setResult(null);
+    setError('');
+
+    try {
+      const res = await rebuildOptimize();
+      setProgress(100);
+      setResult({
+        inserted: 0,
+        updated: 0,
+        duration: res.data.data.duration,
+        sync_at: '',
+        optimize_inserted: res.data.data.optimize_inserted,
+        optimize_updated: res.data.data.optimize_updated,
+      });
+      setMode('done');
+      fetchStatus();
+    } catch (e: any) {
+      setProgress(0);
+      setError(e?.response?.data?.detail || e.message || '重建失败');
       setMode('error');
     }
   };
@@ -86,7 +118,7 @@ const SyncReport = () => {
         {/* 同步状态卡片 */}
         <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">同步状态</h2>
-          <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="rounded-lg bg-gray-50 p-4">
               <p className="text-xs text-gray-500">最后同步时间</p>
               <p className="mt-1 text-sm font-medium text-gray-900">
@@ -94,9 +126,15 @@ const SyncReport = () => {
               </p>
             </div>
             <div className="rounded-lg bg-gray-50 p-4">
-              <p className="text-xs text-gray-500">消息总数</p>
+              <p className="text-xs text-gray-500">原始消息数</p>
               <p className="mt-1 text-sm font-medium text-gray-900">
                 {status?.total?.toLocaleString() ?? '-'}
+              </p>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-4">
+              <p className="text-xs text-gray-500">优化消息数</p>
+              <p className="mt-1 text-sm font-medium text-gray-900">
+                {status?.optimize_total?.toLocaleString() ?? '-'}
               </p>
             </div>
           </div>
@@ -130,8 +168,23 @@ const SyncReport = () => {
             </label>
           </div>
 
+          {/* 优化选项 */}
+          <label className="mt-4 flex cursor-pointer items-center gap-2.5 select-none">
+            <input
+              type="checkbox"
+              checked={optimize}
+              onChange={(e) => setOptimize(e.target.checked)}
+              disabled={isSyncing}
+              className="size-4 rounded border-gray-300 text-blue-600 accent-blue-600 disabled:opacity-50"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-700">同步优化数据</span>
+              <p className="text-xs text-gray-400">解析消息内容并写入 optimize_msg 集合，便于查询和展示</p>
+            </div>
+          </label>
+
           {/* 按钮组 */}
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Button
               disabled={isSyncing || !start || !end}
               onClick={() => handleSync(false)}
@@ -145,6 +198,13 @@ const SyncReport = () => {
             >
               {isSyncing ? '同步中...' : '全量同步'}
             </Button>
+            <Button
+              variant="secondary"
+              disabled={isSyncing}
+              onClick={() => handleRebuild()}
+            >
+              {isSyncing ? '处理中...' : '重建优化数据'}
+            </Button>
           </div>
 
           {/* 进度条 */}
@@ -152,7 +212,11 @@ const SyncReport = () => {
             <div className="mt-5">
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>
-                  {isSyncing ? '正在从飞书拉取消息...' : mode === 'done' ? '同步完成' : '同步失败'}
+                  {isSyncing
+                    ? '正在处理中...'
+                    : mode === 'done'
+                      ? '处理完成'
+                      : '处理失败'}
                 </span>
                 <span>{Math.round(progress)}%</span>
               </div>
@@ -176,20 +240,48 @@ const SyncReport = () => {
         {result && (
           <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">同步结果</h2>
-            <div className="mt-4 grid grid-cols-3 gap-4">
-              <div className="rounded-lg bg-green-50 p-4 text-center">
-                <p className="text-2xl font-bold text-green-600">{result.inserted}</p>
-                <p className="mt-1 text-xs text-gray-500">新增消息</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-4 text-center">
-                <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
-                <p className="mt-1 text-xs text-gray-500">更新消息</p>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4 text-center">
-                <p className="text-2xl font-bold text-gray-600">{result.duration}s</p>
-                <p className="mt-1 text-xs text-gray-500">耗时</p>
-              </div>
-            </div>
+
+            {/* 原始数据（重建场景下隐藏） */}
+            {(result.inserted > 0 || result.updated > 0) && (
+              <>
+                <p className="mt-3 text-xs font-medium text-gray-500">原始数据 (raw_msg)</p>
+                <div className="mt-2 grid grid-cols-3 gap-4">
+                  <div className="rounded-lg bg-green-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-green-600">{result.inserted}</p>
+                    <p className="mt-1 text-xs text-gray-500">新增</p>
+                  </div>
+                  <div className="rounded-lg bg-blue-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
+                    <p className="mt-1 text-xs text-gray-500">更新</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-gray-600">{result.duration}s</p>
+                    <p className="mt-1 text-xs text-gray-500">耗时</p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 优化数据 */}
+            {result.optimize_inserted !== undefined && (
+              <>
+                <p className="mt-5 text-xs font-medium text-gray-500">优化数据 (optimize_msg)</p>
+                <div className="mt-2 grid grid-cols-3 gap-4">
+                  <div className="rounded-lg bg-purple-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-purple-600">{result.optimize_inserted}</p>
+                    <p className="mt-1 text-xs text-gray-500">新增</p>
+                  </div>
+                  <div className="rounded-lg bg-indigo-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-indigo-600">{result.optimize_updated}</p>
+                    <p className="mt-1 text-xs text-gray-500">更新</p>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 p-4 text-center">
+                    <p className="text-2xl font-bold text-gray-600">{result.duration}s</p>
+                    <p className="mt-1 text-xs text-gray-500">耗时</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 

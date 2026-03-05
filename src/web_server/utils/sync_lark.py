@@ -2,20 +2,27 @@ import os
 import time
 import logging
 from datetime import datetime, date
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
+
+from web_server.utils.msg_parser import parse_raw_msg
 
 logger = logging.getLogger(__name__)
 
 
-def run_sync(start: date = None, end: date = None) -> Dict[str, Any]:
+def run_sync(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    optimize: bool = False,
+) -> Dict[str, Any]:
     """
-    从飞书拉取消息并写入 raw_msg 集合
+    从飞书拉取消息并写入数据库
     - start/end 都传：按日期范围同步
     - 都不传：全量同步（不限时间）
+    - optimize=True：同时生成优化数据写入 optimize_msg
     """
-    from web_server.utils.db_helper import collection
+    from web_server.utils.db_helper import collection, optimize_collection
     import msg_monitor.service.index as msg_monitor_service
 
     chat_id = os.getenv('MONITOR_CHAT_ID')
@@ -26,12 +33,14 @@ def run_sync(start: date = None, end: date = None) -> Dict[str, Any]:
     end_ts = str(int(datetime.combine(end, datetime.max.time()).timestamp())) if end else None
 
     mode = f"{start} -> {end}" if start and end else "全量"
-    logger.info(f"[{chat_id}] 同步模式: {mode}")
+    logger.info(f"[{chat_id}] 同步模式: {mode}, optimize={optimize}")
 
     clock = time.time()
     inserted, updated = 0, 0
+    opt_inserted, opt_updated = 0, 0
     page_token = None
-    buffer = []
+    raw_buffer = []
+    opt_buffer = []
 
     while True:
         params = {
@@ -53,43 +62,99 @@ def run_sync(start: date = None, end: date = None) -> Dict[str, Any]:
             break
 
         for msg in messages:
-            doc = {
+            raw_doc = {
                 **msg,
                 "chat_id": chat_id,
                 "sync_at": datetime.now(),
                 "_id": f"{chat_id}_{msg['message_id']}",
             }
-            buffer.append(doc)
+            raw_buffer.append(raw_doc)
 
-            if len(buffer) >= 100:
-                i, u = _bulk_upsert(collection, buffer)
+            if optimize:
+                opt_buffer.append(parse_raw_msg(msg, chat_id))
+
+            if len(raw_buffer) >= 100:
+                i, u = _bulk_upsert(collection, raw_buffer)
                 inserted += i
                 updated += u
-                buffer.clear()
+                raw_buffer.clear()
+
+                if optimize and opt_buffer:
+                    oi, ou = _bulk_upsert(optimize_collection, opt_buffer)
+                    opt_inserted += oi
+                    opt_updated += ou
+                    opt_buffer.clear()
 
         if not data.get("has_more"):
             break
         page_token = data.get("page_token")
         time.sleep(0.05)
 
+    if raw_buffer:
+        i, u = _bulk_upsert(collection, raw_buffer)
+        inserted += i
+        updated += u
+
+    if optimize and opt_buffer:
+        oi, ou = _bulk_upsert(optimize_collection, opt_buffer)
+        opt_inserted += oi
+        opt_updated += ou
+
+    duration = round(time.time() - clock, 2)
+    sync_at = datetime.now().isoformat()
+    logger.info(f"[{chat_id}] 同步完成: raw +{inserted}, optimize +{opt_inserted}, 耗时{duration}s")
+
+    result: Dict[str, Any] = {
+        "inserted": inserted,
+        "updated": updated,
+        "duration": duration,
+        "sync_at": sync_at,
+    }
+    if optimize:
+        result["optimize_inserted"] = opt_inserted
+        result["optimize_updated"] = opt_updated
+
+    return result
+
+
+def rebuild_optimize() -> Dict[str, Any]:
+    """从 raw_msg 全量重建 optimize_msg（不请求飞书）"""
+    from web_server.utils.db_helper import collection, optimize_collection
+
+    clock = time.time()
+    inserted, updated = 0, 0
+    buffer = []
+
+    for raw in collection.find():
+        chat_id = raw.get("chat_id", "")
+        if not chat_id or "message_id" not in raw:
+            continue
+        buffer.append(parse_raw_msg(raw, chat_id))
+
+        if len(buffer) >= 200:
+            i, u = _bulk_upsert(optimize_collection, buffer)
+            inserted += i
+            updated += u
+            buffer.clear()
+
     if buffer:
-        i, u = _bulk_upsert(collection, buffer)
+        i, u = _bulk_upsert(optimize_collection, buffer)
         inserted += i
         updated += u
 
     duration = round(time.time() - clock, 2)
-    sync_at = datetime.now().isoformat()
-    logger.info(f"[{chat_id}] 同步完成: 新增{inserted}, 更新{updated}, 耗时{duration}s")
-    return {"inserted": inserted, "updated": updated, "duration": duration, "sync_at": sync_at}
+    logger.info(f"optimize 重建完成: +{inserted}, 更新{updated}, 耗时{duration}s")
+    return {"optimize_inserted": inserted, "optimize_updated": updated, "duration": duration}
 
 
 def get_sync_status() -> Dict[str, Any]:
     """获取同步状态：最后同步时间、消息总数"""
-    from web_server.utils.db_helper import collection
+    from web_server.utils.db_helper import collection, optimize_collection
     total = collection.count_documents({})
+    optimize_total = optimize_collection.count_documents({})
     last_doc = collection.find_one(sort=[("sync_at", -1)])
     last_sync_at = last_doc["sync_at"].isoformat() if last_doc and last_doc.get("sync_at") else None
-    return {"total": total, "last_sync_at": last_sync_at}
+    return {"total": total, "optimize_total": optimize_total, "last_sync_at": last_sync_at}
 
 
 def _fetch_with_retry(svc, params: dict, max_retries: int = 3):

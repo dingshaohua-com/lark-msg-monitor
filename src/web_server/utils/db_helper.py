@@ -19,14 +19,14 @@ from pymongo.errors import ConnectionFailure
 client: MongoClient | None = None
 db = None
 collection = None
+optimize_collection = None
 
 
 def init_db(uri: str = "mongodb+srv://root:dshvv@one.0brbjhh.mongodb.net"):
     """应用启动时调用，预热连接"""
-    global client, db, collection
+    global client, db, collection, optimize_collection
     client = MongoClient(uri, maxPoolSize=50)
 
-    # ✅ 关键：立即 ping 一下，建立真实连接，避免第一次请求慢
     try:
         client.admin.command('ping')
         print("✅ MongoDB 连接成功并已预热")
@@ -36,6 +36,7 @@ def init_db(uri: str = "mongodb+srv://root:dshvv@one.0brbjhh.mongodb.net"):
 
     db = client["lark_monitor"]
     collection = db["raw_msg"]
+    optimize_collection = db["optimize_msg"]
     return collection
 
 
