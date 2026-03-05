@@ -1,0 +1,12 @@
+[
+  {
+    "text": "项目手册",
+    "link": "/guide/",
+    "activeMatch": "/guide/"
+  },
+  {
+    "text": "Repress",
+    "link": "/hello/",
+    "activeMatch": "/hello/"
+  }
+]

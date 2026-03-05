@@ -1,0 +1,26 @@
+{
+  "npm.exclude": ["**/packages/**", "**/apps/**"],
+
+  "cSpell.userWords": ["shadcn", "trivago", "turborepo"],
+
+  "files.associations": {
+    // 整个项目的 JSON 都支持注释
+    "**/packages/config-ts/**/*.json": "jsonc"
+  },
+
+  // 使用 Biome 作为默认格式化工具
+  "editor.defaultFormatter": "biomejs.biome",
+  // 保存时自动执行的操作
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
+}

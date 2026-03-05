@@ -1,0 +1,23 @@
+[project]
+name = "lark-msg-monitor"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "asyncio>=4.0.0",
+    "fastapi>=0.135.1",
+    "httpx>=0.28.1",
+    "pymongo>=4.16.0",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.41.0",
+]
+
+
+# ❌ 删掉这种写法 import src.msg_monitor.service.index as service
+# ✅ 正确写法（src 前缀已消失） import msg_monitor.service.index as service
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

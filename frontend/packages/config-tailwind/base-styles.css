@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* tailwind管理范围： 只要你在任意一个会被 Tailwind 扫描到的 CSS 文件里写了 @source，它就把这些路径追加到扫描列表，效果与在被v4抛弃的 tailwind.config.ts 里写 content 完全等价。 */
+@source "../**/*.{ts,tsx}";
+@source "../../../../apps/**/*.{ts,tsx}";
+@source "../../../../packages/**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 导入主题映射配置 */
+@import "./config/theme-mapping.css";
+
+/* 导入主题文件 */
+@import "./themes/default.css";
+@import "./themes/blue.css";
+@import "./themes/green.css";
+@import "./themes/pink.css";
+
+/* 导入自定义样式层 */
+@import "./layers/base.css";
+@import "./layers/components.css";
+@import "./layers/utilities.css";

@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "paths": {
+      // @repo/ui-shadcn为项目的包名，即package.json的name属性，如果非多仓，则@直接对应root即可
+      "@repo/ui-shadcn/*": ["./src/*"]
+    }
+  }
+}

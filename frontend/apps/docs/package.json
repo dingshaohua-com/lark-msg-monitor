@@ -1,0 +1,23 @@
+{
+  "name": "@repo/docs",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "rspress build",
+    "check": "biome check --write",
+    "dev": "rspress dev",
+    "format": "biome format --write",
+    "preview": "rspress preview"
+  },
+  "dependencies": {
+    "@rspress/core": "^2.0.0-rc.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.12",
+    "@repo/config-ts": "workspace:*",
+    "@types/node": "^25.0.10",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  }
+}

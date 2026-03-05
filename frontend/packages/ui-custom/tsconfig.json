@@ -1,0 +1,5 @@
+{
+  "extends": "@repo/config-ts/react-lib.json",
+  "include": ["."],
+  "exclude": ["node_modules"]
+}

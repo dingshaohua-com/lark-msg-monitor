@@ -1,0 +1,26 @@
+{
+  "name": "@repo/ui-custom",
+  "version": "0.0.0",
+  "license": "ISC",
+  "exports": {
+    "./*": {
+      "types": "./src/*/index.tsx",
+      "import": "./src/*/index.tsx"
+    }
+  },
+  "devDependencies": {
+    "@repo/config-ts": "workspace:*",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "peerDependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.4.0"
+  }
+}
