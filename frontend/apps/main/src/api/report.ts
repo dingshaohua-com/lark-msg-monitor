@@ -9,6 +9,7 @@ interface SyncReportParams {
 interface SyncResult {
   inserted: number;
   updated: number;
+  replies?: number;
   duration: number;
   sync_at: string;
   optimize_inserted?: number;
@@ -16,8 +17,10 @@ interface SyncResult {
 }
 
 interface SyncStatus {
-  total: number;
+  raw_total: number;
   optimize_total: number;
+  optimize_main: number;
+  optimize_replies: number;
   last_sync_at: string | null;
 }
 

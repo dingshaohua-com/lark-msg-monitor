@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 
 from web_server.utils.sync_lark import run_sync, get_sync_status, rebuild_optimize
+from web_server.utils.query_msgs import query_optimize_msgs, get_message_replies
 
 router = APIRouter(prefix="/report", tags=["report"])
 
@@ -17,6 +18,43 @@ async def get_report():
 @router.get("/download")
 async def download_report():
     return {"message": "i am download"}
+
+
+@router.get("/messages")
+async def get_messages(
+    keyword: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    msg_type: Optional[str] = None,
+    sender_type: Optional[str] = None,
+    has_reply: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+):
+    try:
+        result = await asyncio.to_thread(
+            query_optimize_msgs,
+            keyword=keyword,
+            start_date=start_date,
+            end_date=end_date,
+            msg_type=msg_type,
+            sender_type=sender_type,
+            has_reply=has_reply,
+            page=page,
+            page_size=page_size,
+        )
+        return {"data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/messages/{message_id}/replies")
+async def get_replies(message_id: str):
+    try:
+        items = await asyncio.to_thread(get_message_replies, message_id)
+        return {"data": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/sync/status")
